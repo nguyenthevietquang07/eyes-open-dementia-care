@@ -27,7 +27,7 @@ export default function CaregiverDashboard() {
         <div className="container mx-auto px-6 py-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Mind Minder</h1>
+              <h1 className="text-2xl font-bold text-foreground">Eyes Open</h1>
               <p className="text-sm text-muted-foreground">Caregiver Dashboard</p>
             </div>
             <ModeToggle />

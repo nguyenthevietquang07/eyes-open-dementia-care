@@ -5,6 +5,7 @@ import ObjectLabelOverlay from './ObjectLabelOverlay';
 import ReminderNotification from './ReminderNotification';
 import WarningAlert from './WarningAlert';
 import { useObjectDetection } from '@/hooks/useObjectDetection';
+import { useVisualMatcher } from '@/hooks/useVisualMatcher';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { useMode } from '@/contexts/ModeContext';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -32,6 +33,7 @@ export default function ElderView() {
     cameraActive
   );
 
+  const { matchVisual, isModelLoading: isMatcherLoading } = useVisualMatcher();
 
   const completeMutation = useMutation({
     mutationFn: (id: string) => apiRequest('PATCH', `/api/reminders/${id}`, { completed: true }),
@@ -72,38 +74,66 @@ export default function ElderView() {
   }, []);
 
   useEffect(() => {
-    if (!labels || !detectedObjects.length) {
+    if (!labels || !detectedObjects.length || !videoRef.current || !matchVisual) {
       setDetectedLabels([]);
       return;
     }
 
+    let cancelled = false;
     const currentTime = Date.now();
-    const matchedLabels: Label[] = [];
     
-    detectedObjects.forEach(obj => {
-      const matchedLabel = labels.find(label => 
-        label.detectedObjects?.some(detObj => 
-          detObj.toLowerCase().includes(obj.class.toLowerCase()) ||
-          obj.class.toLowerCase().includes(detObj.toLowerCase())
-        )
-      );
-
-      if (matchedLabel && !matchedLabels.find(l => l.id === matchedLabel.id)) {
-        matchedLabels.push(matchedLabel);
+    const matchTimeout = setTimeout(async () => {
+      if (cancelled) return;
+      
+      const matchedLabels: Label[] = [];
+      const SIMILARITY_THRESHOLD = 0.65; // 65% visual similarity required
+      
+      for (const obj of detectedObjects) {
+        if (cancelled) break;
         
-        const lastSeen = lastSeenRef.current.get(matchedLabel.id);
-        if (lastSeen && currentTime - lastSeen < 30000) {
-          setWarningObject(matchedLabel);
-          setShowWarning(true);
-          setTimeout(() => setShowWarning(false), 5000);
+        const potentialMatches = labels.filter(label => 
+          label.detectedObjects?.some(detObj => 
+            detObj.toLowerCase().includes(obj.class.toLowerCase()) ||
+            obj.class.toLowerCase().includes(detObj.toLowerCase())
+          )
+        );
+
+        for (const label of potentialMatches) {
+          if (cancelled) break;
+          if (matchedLabels.find(l => l.id === label.id)) continue;
+
+          const similarity = await matchVisual(
+            videoRef.current!,
+            obj.bbox,
+            label.imageData
+          );
+
+          if (similarity >= SIMILARITY_THRESHOLD) {
+            matchedLabels.push(label);
+            
+            const lastSeen = lastSeenRef.current.get(label.id);
+            if (lastSeen && currentTime - lastSeen < 30000) {
+              setWarningObject(label);
+              setShowWarning(true);
+              setTimeout(() => setShowWarning(false), 5000);
+            }
+            
+            lastSeenRef.current.set(label.id, currentTime);
+            break; // Found a match for this detection, move to next
+          }
         }
-        
-        lastSeenRef.current.set(matchedLabel.id, currentTime);
       }
-    });
 
-    setDetectedLabels(matchedLabels);
-  }, [detectedObjects, labels]);
+      if (!cancelled) {
+        setDetectedLabels(matchedLabels);
+      }
+    }, 500); // Throttle to 500ms
+
+    return () => {
+      cancelled = true;
+      clearTimeout(matchTimeout);
+    };
+  }, [detectedObjects, labels, matchVisual]);
 
 
   const activeReminders = reminders?.filter(r => {
@@ -114,7 +144,7 @@ export default function ElderView() {
     return timeDiff > -300000 && timeDiff < 300000;
   }) || [];
 
-  const isLoading = isObjectModelLoading;
+  const isLoading = isObjectModelLoading || isMatcherLoading;
 
   return (
     <div className="fixed inset-0 bg-black">
@@ -170,7 +200,7 @@ export default function ElderView() {
           <div className="text-center">
             <Loader2 className="mx-auto h-24 w-24 text-white animate-spin mb-6" />
             <p className="text-4xl font-bold text-white">
-              {!cameraActive ? 'Starting Camera...' : 'Loading Object Detection...'}
+              {!cameraActive ? 'Starting Camera...' : 'Loading AI Recognition...'}
             </p>
           </div>
         </div>

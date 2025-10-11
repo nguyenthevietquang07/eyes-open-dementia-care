@@ -1,7 +1,7 @@
-# Mind Minder - Dementia Care Assistant
+# Eyes Open - Dementia Care Assistant
 
 ## Overview
-Mind Minder is a compassionate web application designed to help elderly people with dementia through two distinct modes: a caregiver mode for setup and an elder mode for hands-free assistance.
+Eyes Open is a compassionate web application designed to help elderly people with dementia through two distinct modes: a caregiver mode for setup and an elder mode for hands-free, AI-powered visual recognition.
 
 ## Project Purpose
 - **Caregiver Mode**: Create reminders and label objects/people with photos
@@ -25,8 +25,9 @@ The MVP is complete with:
 - **State Management**: TanStack Query
 - **UI Components**: Shadcn UI + Tailwind CSS
 - **AI/ML**: 
-  - TensorFlow.js with COCO-SSD for object detection
-  - MediaPipe Hands for gesture recognition
+  - TensorFlow.js with COCO-SSD for generic object detection (person, bottle, etc.)
+  - MobileNet for visual feature extraction and similarity matching
+  - Visual similarity threshold: 65% for person/object identification
 - **Animations**: Framer Motion
 
 ### Backend (Express + Node.js)
@@ -47,14 +48,15 @@ The MVP is complete with:
 - Reminder form with date/time picker
 - Label creation with photo upload
 - Automatic object detection when photos are uploaded
-- Visual feedback showing detected objects
+- Visual feedback showing detected objects with badges
 
 ### Elder Mode
-- Full-screen camera view (button-free interface)
-- Real-time object detection overlay
+- Full-screen camera view with back button navigation
+- Real-time object detection overlay with live detection panel
+- **Visual Recognition**: Uses MobileNet AI to identify SPECIFIC people and objects (e.g., "John" vs any person)
+- Visual similarity matching (65% threshold) ensures labels only appear for the correct person/object
 - Large, high-contrast label display when recognized objects appear
 - Automatic reminder notifications at scheduled times
-- Thumbs up gesture recognition to complete tasks
 - Warning alerts when approaching recently seen objects
 - Ultra-large text (text-6xl to text-8xl) for maximum visibility
 
@@ -65,11 +67,18 @@ The MVP is complete with:
 - **Calming Aesthetics**: Teal primary color scheme (200 70% 45%) for trust and care
 
 ## Recent Changes
+- **Visual Recognition System** (2025-01-11): Implemented MobileNet-based visual similarity matching to identify SPECIFIC people and objects, not just generic categories
+  - 224x224 image preprocessing with aspect ratio preservation (letterboxing)
+  - L2-normalized feature vectors for consistent embeddings  
+  - 65% cosine similarity threshold for matching
+  - Label feature caching to reduce redundant inference
+  - 500ms throttling to prevent UI blocking
+- **UI/UX Improvements** (2025-01-11): Added live detection panel, back button navigation, detected object badges in labels
+- **App Renamed** (2025-01-11): Changed from Mind Minder to Eyes Open
 - Implemented complete schema with reminders and labels (2025-01-10)
 - Built all frontend components for both modes (2025-01-10)
 - Integrated TensorFlow.js COCO-SSD for object detection (2025-01-10)
-- Integrated MediaPipe Hands for thumbs up gesture recognition (2025-01-10)
-- Added automatic object detection on label photo upload (2025-01-10)
+- Removed gesture detection to focus on core visual recognition (2025-01-11)
 
 ## User Preferences
 - Prefer open-source, free AI/ML models

@@ -26,7 +26,8 @@ export function useDetectedObjects(imageData: string) {
         const predictions = await model.detect(img);
         
         if (isMounted) {
-          const detectedClasses = [...new Set(predictions.map(p => p.class))];
+          const uniqueClasses = new Set(predictions.map(p => p.class));
+          const detectedClasses = Array.from(uniqueClasses);
           setObjects(detectedClasses);
         }
       } catch (error) {
