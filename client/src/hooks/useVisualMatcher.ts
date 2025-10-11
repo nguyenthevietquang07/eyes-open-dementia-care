@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import * as mobilenet from '@tensorflow-models/mobilenet';
 import * as tf from '@tensorflow/tfjs';
 
@@ -120,7 +120,7 @@ export function useVisualMatcher() {
     return Math.max(0, Math.min(1, dotProduct));
   };
 
-  const matchVisual = async (
+  const matchVisual = useCallback(async (
     videoFrame: HTMLVideoElement,
     bbox: [number, number, number, number],
     labelImage: string
@@ -176,7 +176,7 @@ export function useVisualMatcher() {
       console.error('Error in visual matching:', error);
       return 0;
     }
-  };
+  }, []);
 
   return { matchVisual, isModelLoading };
 }
