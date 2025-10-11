@@ -51,6 +51,20 @@ export default function LabelCard({ label }: LabelCardProps) {
             <h3 className="font-semibold truncate" data-testid="text-label-name">
               {label.name}
             </h3>
+            {label.detectedObjects && label.detectedObjects.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {label.detectedObjects.map((obj, idx) => (
+                  <Badge 
+                    key={obj} 
+                    variant="outline" 
+                    className="text-xs"
+                    data-testid={`text-label-detected-object-${idx}`}
+                  >
+                    {obj}
+                  </Badge>
+                ))}
+              </div>
+            )}
             {label.lastSeenAt && (
               <p className="text-xs text-muted-foreground mt-1">
                 Last seen: {new Date(label.lastSeenAt).toLocaleDateString()}

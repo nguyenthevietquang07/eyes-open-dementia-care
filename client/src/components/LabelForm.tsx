@@ -164,8 +164,12 @@ export default function LabelForm() {
                 <div className="space-y-2">
                   <p className="text-sm font-medium">Detected objects:</p>
                   <div className="flex flex-wrap gap-2">
-                    {detectedObjects.map((obj) => (
-                      <Badge key={obj} variant="secondary">
+                    {detectedObjects.map((obj, idx) => (
+                      <Badge 
+                        key={obj} 
+                        variant="secondary"
+                        data-testid={`badge-detected-object-${idx}`}
+                      >
                         {obj}
                       </Badge>
                     ))}

@@ -4,10 +4,9 @@ import { Reminder, Label } from '@shared/schema';
 import ObjectLabelOverlay from './ObjectLabelOverlay';
 import ReminderNotification from './ReminderNotification';
 import WarningAlert from './WarningAlert';
-import GestureFeedback from './GestureFeedback';
 import { useObjectDetection } from '@/hooks/useObjectDetection';
-import { useGestureDetection } from '@/hooks/useGestureDetection';
-import { Camera, Loader2 } from 'lucide-react';
+import { Loader2, ArrowLeft } from 'lucide-react';
+import { useMode } from '@/contexts/ModeContext';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 
 export default function ElderView() {
@@ -16,8 +15,8 @@ export default function ElderView() {
   const [detectedLabels, setDetectedLabels] = useState<Label[]>([]);
   const [showWarning, setShowWarning] = useState(false);
   const [warningObject, setWarningObject] = useState<Label | null>(null);
-  const [gestureDetected, setGestureDetected] = useState(false);
   const lastSeenRef = useRef<Map<string, number>>(new Map());
+  const { setMode } = useMode();
 
   const { data: reminders } = useQuery<Reminder[]>({
     queryKey: ['/api/reminders'],
@@ -33,10 +32,6 @@ export default function ElderView() {
     cameraActive
   );
 
-  const { gesture, isModelLoading: isGestureModelLoading, error: gestureError } = useGestureDetection(
-    videoRef,
-    cameraActive
-  );
 
   const completeMutation = useMutation({
     mutationFn: (id: string) => apiRequest('PATCH', `/api/reminders/${id}`, { completed: true }),
@@ -110,16 +105,6 @@ export default function ElderView() {
     setDetectedLabels(matchedLabels);
   }, [detectedObjects, labels]);
 
-  useEffect(() => {
-    if (gesture === 'thumbs_up' && activeReminders.length > 0) {
-      setGestureDetected(true);
-      
-      const oldestReminder = activeReminders[0];
-      completeMutation.mutate(oldestReminder.id);
-
-      setTimeout(() => setGestureDetected(false), 2000);
-    }
-  }, [gesture]);
 
   const activeReminders = reminders?.filter(r => {
     if (r.completed) return false;
@@ -129,7 +114,7 @@ export default function ElderView() {
     return timeDiff > -300000 && timeDiff < 300000;
   }) || [];
 
-  const isLoading = isObjectModelLoading || isGestureModelLoading;
+  const isLoading = isObjectModelLoading;
 
   return (
     <div className="fixed inset-0 bg-black">
@@ -142,18 +127,51 @@ export default function ElderView() {
         data-testid="video-camera-feed"
       />
 
+      <button
+        onClick={() => setMode('caregiver')}
+        className="absolute top-4 left-4 p-4 bg-white/90 rounded-full hover:bg-white transition-colors z-50"
+        data-testid="button-back-to-caregiver"
+        aria-label="Back to Caregiver Mode"
+      >
+        <ArrowLeft className="h-8 w-8 text-black" />
+      </button>
+
+      {cameraActive && !isLoading && (
+        <div 
+          className="absolute top-4 right-4 bg-black/80 backdrop-blur-sm p-4 rounded-lg z-50 max-w-xs"
+          data-testid="panel-live-detections"
+        >
+          <p className="text-white text-sm font-semibold mb-2">Live Detection:</p>
+          {detectedObjects.length > 0 ? (
+            <div className="space-y-1">
+              {detectedObjects.slice(0, 5).map((obj, idx) => (
+                <div 
+                  key={idx} 
+                  className="text-white text-xs"
+                  data-testid={`text-detected-object-${idx}`}
+                >
+                  {obj.class} ({Math.round(obj.score * 100)}%)
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p 
+              className="text-white/60 text-xs"
+              data-testid="text-no-detections"
+            >
+              No objects detected
+            </p>
+          )}
+        </div>
+      )}
+
       {(!cameraActive || isLoading) && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/90">
           <div className="text-center">
             <Loader2 className="mx-auto h-24 w-24 text-white animate-spin mb-6" />
             <p className="text-4xl font-bold text-white">
-              {!cameraActive ? 'Starting Camera...' : 'Loading AI Models...'}
+              {!cameraActive ? 'Starting Camera...' : 'Loading Object Detection...'}
             </p>
-            {gestureError && (
-              <p className="text-2xl text-red-400 mt-4">
-                Gesture detection unavailable - thumbs up won't work
-              </p>
-            )}
           </div>
         </div>
       )}
@@ -176,7 +194,6 @@ export default function ElderView() {
         />
       )}
 
-      {gestureDetected && <GestureFeedback />}
     </div>
   );
 }
