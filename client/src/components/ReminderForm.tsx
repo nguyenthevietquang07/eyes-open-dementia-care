@@ -1,7 +1,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
-import { insertReminderSchema, type InsertReminder } from '@shared/schema';
+import { insertReminderSchema } from '@shared/schema';
 import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
@@ -54,7 +54,7 @@ export default function ReminderForm() {
   });
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    createMutation.mutate(values as InsertReminder);
+    createMutation.mutate(values);
   }
 
   return (

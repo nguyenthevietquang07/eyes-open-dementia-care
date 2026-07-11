@@ -44,6 +44,8 @@ export class MemStorage implements IStorage {
     const reminder: Reminder = {
       ...insertReminder,
       id,
+      description: insertReminder.description ?? null,
+      completed: insertReminder.completed ?? false,
       createdAt: new Date(),
     };
     this.reminders.set(id, reminder);
@@ -78,6 +80,7 @@ export class MemStorage implements IStorage {
     const label: Label = {
       ...insertLabel,
       id,
+      detectedObjects: insertLabel.detectedObjects ?? null,
       createdAt: new Date(),
       lastSeenAt: null,
     };
