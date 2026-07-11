@@ -8,7 +8,7 @@ import ReminderCard from './ReminderCard';
 import LabelForm from './LabelForm';
 import LabelCard from './LabelCard';
 import { Reminder, Label } from '@shared/schema';
-import { Bell, Tag, Loader2 } from 'lucide-react';
+import { Activity, Bell, Brain, Database, Loader2, ShieldCheck, Tag } from 'lucide-react';
 
 export default function CaregiverDashboard() {
   const [activeTab, setActiveTab] = useState('reminders');
@@ -20,6 +20,11 @@ export default function CaregiverDashboard() {
   const { data: labels, isLoading: loadingLabels } = useQuery<Label[]>({
     queryKey: ['/api/labels'],
   });
+
+  const activeReminders = reminders?.filter((reminder) => !reminder.completed) ?? [];
+  const completedReminders = reminders?.filter((reminder) => reminder.completed) ?? [];
+  const peopleLabels = labels?.filter((label) => label.category === 'person') ?? [];
+  const objectLabels = labels?.filter((label) => label.category === 'object') ?? [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -36,6 +41,95 @@ export default function CaregiverDashboard() {
       </header>
 
       <main className="container mx-auto px-6 py-8">
+        <section className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4" aria-label="Care system status">
+          <Card>
+            <CardContent className="flex items-center gap-4 p-5">
+              <div className="rounded-lg bg-primary/10 p-3 text-primary">
+                <Bell className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{activeReminders.length}</p>
+                <p className="text-sm text-muted-foreground">Active reminders</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="flex items-center gap-4 p-5">
+              <div className="rounded-lg bg-chart-2/10 p-3 text-chart-2">
+                <Tag className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{labels?.length ?? 0}</p>
+                <p className="text-sm text-muted-foreground">
+                  {peopleLabels.length} people, {objectLabels.length} objects
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="flex items-center gap-4 p-5">
+              <div className="rounded-lg bg-chart-3/10 p-3 text-chart-3">
+                <Brain className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">Local</p>
+                <p className="text-sm text-muted-foreground">Browser-side recognition</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="flex items-center gap-4 p-5">
+              <div className="rounded-lg bg-chart-4/10 p-3 text-chart-4">
+                <Database className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">Saved</p>
+                <p className="text-sm text-muted-foreground">Local JSON persistence</p>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="mb-8 grid gap-4 lg:grid-cols-3" aria-label="Assistive readiness">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-5 w-5 text-primary" />
+                Assistive Readiness
+              </CardTitle>
+              <CardDescription>
+                Care plan status before switching to the camera-first elder view
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-lg border p-4">
+                <p className="text-sm font-medium text-muted-foreground">Reminder coverage</p>
+                <p className="mt-2 text-xl font-semibold">{activeReminders.length} upcoming</p>
+              </div>
+              <div className="rounded-lg border p-4">
+                <p className="text-sm font-medium text-muted-foreground">Recognition set</p>
+                <p className="mt-2 text-xl font-semibold">{labels?.length ?? 0} saved labels</p>
+              </div>
+              <div className="rounded-lg border p-4">
+                <p className="text-sm font-medium text-muted-foreground">Completed today</p>
+                <p className="mt-2 text-xl font-semibold">{completedReminders.length} tasks</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-chart-3" />
+                Privacy Guard
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <p>Camera inference runs in the browser with TensorFlow.js and MediaPipe.</p>
+              <p>Only caregiver-authored reminders, labels, and reference images are saved locally.</p>
+            </CardContent>
+          </Card>
+        </section>
+
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full max-w-md grid-cols-2">
             <TabsTrigger value="reminders" className="gap-2" data-testid="tab-reminders">

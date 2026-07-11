@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Hands, Results } from '@mediapipe/hands';
+import type { Hands, Results } from '@mediapipe/hands';
 
 export type GestureType = 'thumbs_up' | 'none';
 
@@ -47,6 +47,7 @@ export function useGestureDetection(
 
     async function initializeHands() {
       try {
+        const { Hands } = await import('@mediapipe/hands');
         const hands = new Hands({
           locateFile: (file) => {
             return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;

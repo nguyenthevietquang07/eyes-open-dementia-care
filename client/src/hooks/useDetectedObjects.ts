@@ -1,6 +1,4 @@
 import { useEffect, useState } from 'react';
-import * as cocoSsd from '@tensorflow-models/coco-ssd';
-import '@tensorflow/tfjs';
 
 export function useDetectedObjects(imageData: string) {
   const [objects, setObjects] = useState<string[]>([]);
@@ -14,6 +12,8 @@ export function useDetectedObjects(imageData: string) {
     async function detectObjects() {
       setIsLoading(true);
       try {
+        await import('@tensorflow/tfjs');
+        const cocoSsd = await import('@tensorflow-models/coco-ssd');
         const model = await cocoSsd.load();
         
         const img = new Image();

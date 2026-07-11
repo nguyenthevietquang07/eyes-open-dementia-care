@@ -5,6 +5,8 @@ import {
   type InsertLabel 
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import fs from "fs";
+import path from "path";
 
 export interface IStorage {
   getReminders(): Promise<Reminder[]>;
@@ -23,10 +25,58 @@ export interface IStorage {
 export class MemStorage implements IStorage {
   private reminders: Map<string, Reminder>;
   private labels: Map<string, Label>;
+  private readonly dataPath: string;
 
   constructor() {
     this.reminders = new Map();
     this.labels = new Map();
+    this.dataPath = path.resolve(process.cwd(), ".local", "eyes-open-data.json");
+    this.load();
+  }
+
+  private load() {
+    if (!fs.existsSync(this.dataPath)) return;
+
+    try {
+      const raw = JSON.parse(fs.readFileSync(this.dataPath, "utf-8")) as {
+        reminders?: Reminder[];
+        labels?: Label[];
+      };
+
+      for (const reminder of raw.reminders ?? []) {
+        this.reminders.set(reminder.id, {
+          ...reminder,
+          scheduledFor: new Date(reminder.scheduledFor),
+          createdAt: new Date(reminder.createdAt),
+        });
+      }
+
+      for (const label of raw.labels ?? []) {
+        this.labels.set(label.id, {
+          ...label,
+          lastSeenAt: label.lastSeenAt ? new Date(label.lastSeenAt) : null,
+          createdAt: new Date(label.createdAt),
+        });
+      }
+    } catch (error) {
+      console.warn("Could not load local Eyes Open data store:", error);
+    }
+  }
+
+  private persist() {
+    fs.mkdirSync(path.dirname(this.dataPath), { recursive: true });
+    fs.writeFileSync(
+      this.dataPath,
+      JSON.stringify(
+        {
+          reminders: Array.from(this.reminders.values()),
+          labels: Array.from(this.labels.values()),
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
   }
 
   async getReminders(): Promise<Reminder[]> {
@@ -49,6 +99,7 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
     };
     this.reminders.set(id, reminder);
+    this.persist();
     return reminder;
   }
 
@@ -58,11 +109,14 @@ export class MemStorage implements IStorage {
 
     const updated = { ...reminder, ...data };
     this.reminders.set(id, updated);
+    this.persist();
     return updated;
   }
 
   async deleteReminder(id: string): Promise<boolean> {
-    return this.reminders.delete(id);
+    const deleted = this.reminders.delete(id);
+    if (deleted) this.persist();
+    return deleted;
   }
 
   async getLabels(): Promise<Label[]> {
@@ -85,6 +139,7 @@ export class MemStorage implements IStorage {
       lastSeenAt: null,
     };
     this.labels.set(id, label);
+    this.persist();
     return label;
   }
 
@@ -94,11 +149,14 @@ export class MemStorage implements IStorage {
 
     const updated = { ...label, ...data };
     this.labels.set(id, updated);
+    this.persist();
     return updated;
   }
 
   async deleteLabel(id: string): Promise<boolean> {
-    return this.labels.delete(id);
+    const deleted = this.labels.delete(id);
+    if (deleted) this.persist();
+    return deleted;
   }
 }
 

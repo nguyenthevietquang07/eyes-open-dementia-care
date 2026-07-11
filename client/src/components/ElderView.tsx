@@ -4,8 +4,11 @@ import { Reminder, Label } from '@shared/schema';
 import ObjectLabelOverlay from './ObjectLabelOverlay';
 import ReminderNotification from './ReminderNotification';
 import WarningAlert from './WarningAlert';
+import GestureFeedback from './GestureFeedback';
+import RecognitionStatusPanel from './RecognitionStatusPanel';
 import { useObjectDetection } from '@/hooks/useObjectDetection';
 import { useVisualMatcher } from '@/hooks/useVisualMatcher';
+import { useGestureDetection } from '@/hooks/useGestureDetection';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { useMode } from '@/contexts/ModeContext';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -15,8 +18,10 @@ export default function ElderView() {
   const [cameraActive, setCameraActive] = useState(false);
   const [detectedLabels, setDetectedLabels] = useState<Label[]>([]);
   const [showWarning, setShowWarning] = useState(false);
+  const [showGestureFeedback, setShowGestureFeedback] = useState(false);
   const [warningObject, setWarningObject] = useState<Label | null>(null);
   const lastSeenRef = useRef<Map<string, number>>(new Map());
+  const lastGestureCompletedRef = useRef<string | null>(null);
   const { setMode } = useMode();
 
   const { data: reminders } = useQuery<Reminder[]>({
@@ -28,19 +33,40 @@ export default function ElderView() {
     queryKey: ['/api/labels'],
   });
 
-  const { detectedObjects, isModelLoading: isObjectModelLoading } = useObjectDetection(
+  const { mutate: completeReminder, isPending: isCompletingReminder } = useMutation({
+    mutationFn: (id: string) => apiRequest('PATCH', `/api/reminders/${id}`, { completed: true }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/reminders'] });
+    },
+  });
+
+  const { mutate: markLabelSeen } = useMutation({
+    mutationFn: (id: string) => apiRequest('PATCH', `/api/labels/${id}`, { lastSeenAt: new Date().toISOString() }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/labels'] });
+    },
+  });
+
+  const activeReminders = reminders?.filter(r => {
+    if (r.completed) return false;
+    const scheduledDate = new Date(r.scheduledFor);
+    const now = new Date();
+    const timeDiff = scheduledDate.getTime() - now.getTime();
+    return timeDiff > -300000 && timeDiff < 300000;
+  }) || [];
+
+  const { detectedObjects, isModelLoading: isObjectModelLoading, lastInferenceMs, detectionsPerSecond } = useObjectDetection(
     videoRef,
     cameraActive
   );
 
   const { matchVisual, isModelLoading: isMatcherLoading } = useVisualMatcher();
 
-  const completeMutation = useMutation({
-    mutationFn: (id: string) => apiRequest('PATCH', `/api/reminders/${id}`, { completed: true }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/reminders'] });
-    },
-  });
+  const {
+    gesture,
+    isModelLoading: isGestureModelLoading,
+    error: gestureError,
+  } = useGestureDetection(videoRef, cameraActive && activeReminders.length > 0);
 
   useEffect(() => {
     async function startCamera() {
@@ -119,6 +145,7 @@ export default function ElderView() {
             }
             
             lastSeenRef.current.set(label.id, currentTime);
+            markLabelSeen(label.id);
             break; // Found a match for this detection, move to next
           }
         }
@@ -133,16 +160,25 @@ export default function ElderView() {
       cancelled = true;
       clearTimeout(matchTimeout);
     };
-  }, [detectedObjects, labels, matchVisual]);
+  }, [detectedObjects, labels, matchVisual, markLabelSeen]);
 
+  useEffect(() => {
+    if (gesture !== 'thumbs_up' || activeReminders.length === 0 || isCompletingReminder) {
+      return;
+    }
 
-  const activeReminders = reminders?.filter(r => {
-    if (r.completed) return false;
-    const scheduledDate = new Date(r.scheduledFor);
-    const now = new Date();
-    const timeDiff = scheduledDate.getTime() - now.getTime();
-    return timeDiff > -300000 && timeDiff < 300000;
-  }) || [];
+    const reminder = activeReminders[0];
+    if (lastGestureCompletedRef.current === reminder.id) {
+      return;
+    }
+
+    lastGestureCompletedRef.current = reminder.id;
+    setShowGestureFeedback(true);
+    completeReminder(reminder.id);
+
+    const timer = window.setTimeout(() => setShowGestureFeedback(false), 1600);
+    return () => window.clearTimeout(timer);
+  }, [activeReminders, completeReminder, gesture, isCompletingReminder]);
 
   const isLoading = isObjectModelLoading || isMatcherLoading;
 
@@ -167,32 +203,42 @@ export default function ElderView() {
       </button>
 
       {cameraActive && !isLoading && (
-        <div 
-          className="absolute top-4 right-4 bg-black/80 backdrop-blur-sm p-4 rounded-lg z-50 max-w-xs"
-          data-testid="panel-live-detections"
-        >
-          <p className="text-white text-sm font-semibold mb-2">Live Detection:</p>
-          {detectedObjects.length > 0 ? (
-            <div className="space-y-1">
-              {detectedObjects.slice(0, 5).map((obj, idx) => (
-                <div 
-                  key={idx} 
-                  className="text-white text-xs"
-                  data-testid={`text-detected-object-${idx}`}
-                >
-                  {obj.class} ({Math.round(obj.score * 100)}%)
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p 
-              className="text-white/60 text-xs"
-              data-testid="text-no-detections"
-            >
-              No objects detected
-            </p>
-          )}
-        </div>
+        <>
+          <div 
+            className="absolute top-4 right-4 bg-black/80 backdrop-blur-sm p-4 rounded-lg z-50 max-w-xs"
+            data-testid="panel-live-detections"
+          >
+            <p className="text-white text-sm font-semibold mb-2">Live Detection:</p>
+            {detectedObjects.length > 0 ? (
+              <div className="space-y-1">
+                {detectedObjects.slice(0, 5).map((obj, idx) => (
+                  <div 
+                    key={idx} 
+                    className="text-white text-xs"
+                    data-testid={`text-detected-object-${idx}`}
+                  >
+                    {obj.class} ({Math.round(obj.score * 100)}%)
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p 
+                className="text-white/60 text-xs"
+                data-testid="text-no-detections"
+              >
+                No objects detected
+              </p>
+            )}
+          </div>
+
+          <RecognitionStatusPanel
+            objectCount={detectedObjects.length}
+            lastInferenceMs={lastInferenceMs}
+            detectionsPerSecond={detectionsPerSecond}
+            gesture={gesture}
+            isGestureAvailable={!isGestureModelLoading && !gestureError}
+          />
+        </>
       )}
 
       {(!cameraActive || isLoading) && (
@@ -216,6 +262,8 @@ export default function ElderView() {
           reminder={reminder}
         />
       ))}
+
+      {showGestureFeedback && <GestureFeedback />}
 
       {showWarning && warningObject && (
         <WarningAlert 

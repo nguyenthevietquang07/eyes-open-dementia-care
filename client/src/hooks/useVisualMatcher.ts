@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import * as mobilenet from '@tensorflow-models/mobilenet';
-import * as tf from '@tensorflow/tfjs';
+import type { MobileNet } from '@tensorflow-models/mobilenet';
+import type { Tensor } from '@tensorflow/tfjs';
 
 export function useVisualMatcher() {
-  const modelRef = useRef<mobilenet.MobileNet | null>(null);
+  const modelRef = useRef<MobileNet | null>(null);
   const [isModelLoading, setIsModelLoading] = useState(true);
   const labelCacheRef = useRef<Map<string, number[] | null>>(new Map());
 
@@ -12,6 +12,8 @@ export function useVisualMatcher() {
 
     async function loadModel() {
       try {
+        await import('@tensorflow/tfjs');
+        const mobilenet = await import('@tensorflow-models/mobilenet');
         const model = await mobilenet.load();
         if (isMounted) {
           modelRef.current = model;
@@ -95,7 +97,7 @@ export function useVisualMatcher() {
   const extractFeatures = async (canvas: HTMLCanvasElement): Promise<number[] | null> => {
     if (!modelRef.current) return null;
     
-    let tensor: tf.Tensor | null = null;
+    let tensor: Tensor | null = null;
     try {
       tensor = await modelRef.current.infer(canvas, { embedding: true } as any);
       const features = await tensor.data();

@@ -15,6 +15,8 @@ The MVP is complete with:
 - Real-time camera feed with AI-powered object recognition
 - Thumbs up gesture detection to complete tasks
 - Warning alerts for repeated object encounters
+- Local JSON persistence for restart-safe demos
+- Inference telemetry and privacy status in Elder Mode
 - Fully accessible, high-contrast design for elderly users
 
 ## Technical Architecture
@@ -32,7 +34,8 @@ The MVP is complete with:
 
 ### Backend (Express + Node.js)
 - **Server**: Express.js
-- **Storage**: In-memory storage (MemStorage)
+- **Storage**: Local JSON-backed storage for restart-safe demos
+- **Production path**: Drizzle schema is included for Postgres-backed evolution
 - **API Endpoints**:
   - `/api/reminders` - CRUD for reminders
   - `/api/labels` - CRUD for labels
@@ -78,7 +81,7 @@ The MVP is complete with:
 - Implemented complete schema with reminders and labels (2025-01-10)
 - Built all frontend components for both modes (2025-01-10)
 - Integrated TensorFlow.js COCO-SSD for object detection (2025-01-10)
-- Removed gesture detection to focus on core visual recognition (2025-01-11)
+- Restored MediaPipe gesture completion, added local persistence, and lazy-loaded ML packages for a stronger portfolio demo (2026-07-12)
 
 ## User Preferences
 - Prefer open-source, free AI/ML models
