@@ -28,6 +28,23 @@ Eyes Open is a privacy-conscious assistive AI prototype for dementia care. Careg
 4. Elder Mode displays large visual labels and active reminders over the live camera view.
 5. A thumbs-up gesture marks the active reminder complete without requiring touch input.
 
+## Architecture
+
+See [docs/architecture.md](docs/architecture.md) for the full flowchart and runtime boundaries.
+
+```mermaid
+flowchart LR
+  caregiver["Caregiver creates reminders and labels"] --> api["Express API"]
+  api --> store["Local JSON demo store"]
+  caregiver --> labels["Reference photos"]
+  camera["Elder camera view"] --> detect["COCO-SSD detection"]
+  detect --> match["MobileNet embedding match"]
+  labels --> match
+  match --> overlay["High-contrast elder overlay"]
+  camera --> gesture["MediaPipe thumbs-up"]
+  gesture --> api
+```
+
 ## Repository Structure
 
 ```text
@@ -35,8 +52,7 @@ eyes-open-dementia-care/
   client/        React frontend and browser AI hooks
   server/        Express API, Vite integration, and local persistent storage
   shared/        Drizzle/Zod schemas shared by client and server
-  docs/demo/     Portfolio screenshot assets
-  scripts/       Utility scripts
+  docs/          Architecture, demo plan, design notes, and screenshot assets
 ```
 
 ## Getting Started
@@ -82,6 +98,14 @@ npm run build
 ```
 
 The production build intentionally keeps TensorFlow/MediaPipe model code out of the initial dashboard path through dynamic imports. Vite may still warn about large ML chunks because browser-side vision models are substantial.
+
+## Demo Assets
+
+- Current screenshot: [docs/demo/homepage.png](docs/demo/homepage.png)
+- Recording storyboard: [docs/demo-plan.md](docs/demo-plan.md)
+- Architecture flowchart: [docs/architecture.md](docs/architecture.md)
+
+A short video would help this project, but only if it shows the full loop: caregiver setup, camera permission, live recognition, and thumbs-up completion. A generic click-through would not add much beyond the screenshot and architecture diagram.
 
 ## Resume Positioning
 

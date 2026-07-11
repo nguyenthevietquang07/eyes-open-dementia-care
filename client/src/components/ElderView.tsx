@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Reminder, Label } from '@shared/schema';
 import ObjectLabelOverlay from './ObjectLabelOverlay';
@@ -47,13 +47,13 @@ export default function ElderView() {
     },
   });
 
-  const activeReminders = reminders?.filter(r => {
+  const activeReminders = useMemo(() => reminders?.filter(r => {
     if (r.completed) return false;
     const scheduledDate = new Date(r.scheduledFor);
     const now = new Date();
     const timeDiff = scheduledDate.getTime() - now.getTime();
     return timeDiff > -300000 && timeDiff < 300000;
-  }) || [];
+  }) || [], [reminders]);
 
   const { detectedObjects, isModelLoading: isObjectModelLoading, lastInferenceMs, detectionsPerSecond } = useObjectDetection(
     videoRef,
