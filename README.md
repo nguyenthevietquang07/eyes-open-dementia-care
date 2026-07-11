@@ -2,6 +2,8 @@
 
 Eyes Open is a full-stack prototype that helps caregivers create reminders and visual labels, then gives elders a simplified camera-first view for recognizing people, objects, and scheduled tasks.
 
+![Eyes Open caregiver dashboard](docs/demo/homepage.png)
+
 ## Highlights
 
 - Caregiver dashboard for reminders and labeled people/objects
