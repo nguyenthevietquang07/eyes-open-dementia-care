@@ -7,6 +7,7 @@ interface RecognitionStatusPanelProps {
   detectionsPerSecond: number | null;
   gesture: GestureType;
   isGestureAvailable: boolean;
+  isHandVisible: boolean;
 }
 
 export default function RecognitionStatusPanel({
@@ -15,6 +16,7 @@ export default function RecognitionStatusPanel({
   detectionsPerSecond,
   gesture,
   isGestureAvailable,
+  isHandVisible,
 }: RecognitionStatusPanelProps) {
   const inferenceLabel = lastInferenceMs === null ? 'warming up' : `${lastInferenceMs}ms`;
   const rateLabel = detectionsPerSecond === null ? '--' : `${detectionsPerSecond}/s`;
@@ -45,7 +47,13 @@ export default function RecognitionStatusPanel({
         <div className="flex items-center gap-2">
           <Hand className="h-4 w-4 text-chart-3" />
           <span>
-            {isGestureAvailable ? (gesture === 'thumbs_up' ? 'thumbs up seen' : 'gesture ready') : 'gesture optional'}
+            {isGestureAvailable
+              ? gesture === 'thumbs_up'
+                ? 'thumbs up seen'
+                : isHandVisible
+                  ? 'hand seen'
+                  : 'gesture ready'
+              : 'gesture optional'}
           </span>
         </div>
       </div>

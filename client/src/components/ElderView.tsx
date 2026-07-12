@@ -20,6 +20,7 @@ export default function ElderView() {
   const [showWarning, setShowWarning] = useState(false);
   const [showGestureFeedback, setShowGestureFeedback] = useState(false);
   const [warningObject, setWarningObject] = useState<Label | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const lastSeenRef = useRef<Map<string, number>>(new Map());
   const lastGestureCompletedRef = useRef<string | null>(null);
   const { setMode } = useMode();
@@ -35,7 +36,23 @@ export default function ElderView() {
 
   const { mutate: completeReminder, isPending: isCompletingReminder } = useMutation({
     mutationFn: (id: string) => apiRequest('PATCH', `/api/reminders/${id}`, { completed: true }),
-    onSuccess: () => {
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: ['/api/reminders'] });
+      const previousReminders = queryClient.getQueryData<Reminder[]>(['/api/reminders']);
+      queryClient.setQueryData<Reminder[]>(['/api/reminders'], (current) =>
+        current?.map((reminder) =>
+          reminder.id === id ? { ...reminder, completed: true } : reminder
+        )
+      );
+      return { previousReminders };
+    },
+    onError: (_error, id, context) => {
+      lastGestureCompletedRef.current = lastGestureCompletedRef.current === id ? null : lastGestureCompletedRef.current;
+      if (context?.previousReminders) {
+        queryClient.setQueryData(['/api/reminders'], context.previousReminders);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/reminders'] });
     },
   });
@@ -50,10 +67,8 @@ export default function ElderView() {
   const activeReminders = useMemo(() => reminders?.filter(r => {
     if (r.completed) return false;
     const scheduledDate = new Date(r.scheduledFor);
-    const now = new Date();
-    const timeDiff = scheduledDate.getTime() - now.getTime();
-    return timeDiff > -300000 && timeDiff < 300000;
-  }) || [], [reminders]);
+    return scheduledDate.getTime() <= nowMs;
+  }) || [], [reminders, nowMs]);
 
   const { detectedObjects, isModelLoading: isObjectModelLoading, lastInferenceMs, detectionsPerSecond } = useObjectDetection(
     videoRef,
@@ -65,8 +80,14 @@ export default function ElderView() {
   const {
     gesture,
     isModelLoading: isGestureModelLoading,
+    isHandVisible,
     error: gestureError,
   } = useGestureDetection(videoRef, cameraActive && activeReminders.length > 0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 5000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     async function startCamera() {
@@ -237,6 +258,7 @@ export default function ElderView() {
             detectionsPerSecond={detectionsPerSecond}
             gesture={gesture}
             isGestureAvailable={!isGestureModelLoading && !gestureError}
+            isHandVisible={isHandVisible}
           />
         </>
       )}

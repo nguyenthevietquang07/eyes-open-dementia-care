@@ -13,6 +13,7 @@ export function useObjectDetection(
 ) {
   const [detectedObjects, setDetectedObjects] = useState<DetectedObject[]>([]);
   const [isModelLoading, setIsModelLoading] = useState(true);
+  const [isModelReady, setIsModelReady] = useState(false);
   const [lastInferenceMs, setLastInferenceMs] = useState<number | null>(null);
   const [detectionsPerSecond, setDetectionsPerSecond] = useState<number | null>(null);
   const modelRef = useRef<ObjectDetection | null>(null);
@@ -29,6 +30,7 @@ export function useObjectDetection(
         const model = await cocoSsd.load();
         if (isMounted) {
           modelRef.current = model;
+          setIsModelReady(true);
           setIsModelLoading(false);
         }
       } catch (error) {
@@ -48,7 +50,7 @@ export function useObjectDetection(
   }, []);
 
   useEffect(() => {
-    if (!isActive || !modelRef.current || !videoRef.current) {
+    if (!isActive || !isModelReady || !modelRef.current || !videoRef.current) {
       return;
     }
 
@@ -91,7 +93,7 @@ export function useObjectDetection(
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [isActive, videoRef]);
+  }, [isActive, isModelReady, videoRef]);
 
   return { detectedObjects, isModelLoading, lastInferenceMs, detectionsPerSecond };
 }

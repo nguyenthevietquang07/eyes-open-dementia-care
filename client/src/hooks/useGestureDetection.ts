@@ -29,6 +29,8 @@ function isThumbsUpPose(landmarks: Landmark[]) {
   const thumbLift = Math.min(thumbIp.y, thumbMcp.y, wrist.y) - thumbTip.y;
   const thumbIsRaised = thumbLift > Math.max(0.035, palmWidth * 0.25);
   const thumbIsNotTucked = distance(thumbTip, indexMcp) > palmWidth * 0.25;
+  const thumbIsHighest =
+    thumbTip.y < Math.min(landmarks[8].y, landmarks[12].y, landmarks[16].y, landmarks[20].y) - 0.03;
   const curledFingers = [
     isFingerCurled(landmarks, 8, 6, 5),
     isFingerCurled(landmarks, 12, 10, 9),
@@ -36,7 +38,7 @@ function isThumbsUpPose(landmarks: Landmark[]) {
     isFingerCurled(landmarks, 20, 18, 17),
   ].filter(Boolean).length;
 
-  return thumbIsRaised && thumbIsNotTucked && curledFingers >= 3;
+  return thumbIsRaised && thumbIsNotTucked && (curledFingers >= 2 || thumbIsHighest);
 }
 
 export function useGestureDetection(
@@ -45,6 +47,8 @@ export function useGestureDetection(
 ) {
   const [gesture, setGesture] = useState<GestureType>('none');
   const [isModelLoading, setIsModelLoading] = useState(true);
+  const [isModelReady, setIsModelReady] = useState(false);
+  const [isHandVisible, setIsHandVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const handsRef = useRef<Hands | null>(null);
   const animationFrameRef = useRef<number>();
@@ -53,11 +57,13 @@ export function useGestureDetection(
   const detectThumbsUp = useCallback((results: Results) => {
     if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
       thumbsUpFrameCountRef.current = 0;
+      setIsHandVisible(false);
       setGesture('none');
       return;
     }
 
     const landmarks = results.multiHandLandmarks[0];
+    setIsHandVisible(true);
 
     if (isThumbsUpPose(landmarks)) {
       thumbsUpFrameCountRef.current += 1;
@@ -75,6 +81,7 @@ export function useGestureDetection(
   useEffect(() => {
     if (!isActive) {
       thumbsUpFrameCountRef.current = 0;
+      setIsHandVisible(false);
       setGesture('none');
       return;
     }
@@ -101,6 +108,7 @@ export function useGestureDetection(
 
         if (isMounted) {
           handsRef.current = hands;
+          setIsModelReady(true);
           setIsModelLoading(false);
         }
       } catch (err) {
@@ -127,7 +135,7 @@ export function useGestureDetection(
   }, [isActive, detectThumbsUp]);
 
   useEffect(() => {
-    if (!isActive || !handsRef.current || !videoRef.current) {
+    if (!isActive || !isModelReady || !handsRef.current || !videoRef.current) {
       return;
     }
 
@@ -155,7 +163,7 @@ export function useGestureDetection(
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [isActive, videoRef]);
+  }, [isActive, isModelReady, videoRef]);
 
-  return { gesture, isModelLoading, error };
+  return { gesture, isModelLoading, isHandVisible, error };
 }
