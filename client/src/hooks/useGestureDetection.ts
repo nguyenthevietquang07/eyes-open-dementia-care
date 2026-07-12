@@ -3,6 +3,42 @@ import type { Hands, Results } from '@mediapipe/hands';
 
 export type GestureType = 'thumbs_up' | 'none';
 
+type Landmark = Results['multiHandLandmarks'][number][number];
+
+function distance(a: Landmark, b: Landmark) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function isFingerCurled(landmarks: Landmark[], tipIndex: number, pipIndex: number, mcpIndex: number) {
+  const tip = landmarks[tipIndex];
+  const pip = landmarks[pipIndex];
+  const mcp = landmarks[mcpIndex];
+
+  return tip.y > pip.y - 0.015 || tip.y > mcp.y - 0.01;
+}
+
+function isThumbsUpPose(landmarks: Landmark[]) {
+  const wrist = landmarks[0];
+  const thumbTip = landmarks[4];
+  const thumbIp = landmarks[3];
+  const thumbMcp = landmarks[2];
+  const indexMcp = landmarks[5];
+  const pinkyMcp = landmarks[17];
+
+  const palmWidth = Math.max(distance(indexMcp, pinkyMcp), 0.08);
+  const thumbLift = Math.min(thumbIp.y, thumbMcp.y, wrist.y) - thumbTip.y;
+  const thumbIsRaised = thumbLift > Math.max(0.035, palmWidth * 0.25);
+  const thumbIsNotTucked = distance(thumbTip, indexMcp) > palmWidth * 0.25;
+  const curledFingers = [
+    isFingerCurled(landmarks, 8, 6, 5),
+    isFingerCurled(landmarks, 12, 10, 9),
+    isFingerCurled(landmarks, 16, 14, 13),
+    isFingerCurled(landmarks, 20, 18, 17),
+  ].filter(Boolean).length;
+
+  return thumbIsRaised && thumbIsNotTucked && curledFingers >= 3;
+}
+
 export function useGestureDetection(
   videoRef: React.RefObject<HTMLVideoElement>,
   isActive: boolean
@@ -12,26 +48,24 @@ export function useGestureDetection(
   const [error, setError] = useState<string | null>(null);
   const handsRef = useRef<Hands | null>(null);
   const animationFrameRef = useRef<number>();
+  const thumbsUpFrameCountRef = useRef(0);
 
   const detectThumbsUp = useCallback((results: Results) => {
     if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+      thumbsUpFrameCountRef.current = 0;
       setGesture('none');
       return;
     }
 
     const landmarks = results.multiHandLandmarks[0];
-    
-    const thumbTip = landmarks[4];
-    const thumbIp = landmarks[3];
-    
-    const isThumbUp = thumbTip.y < thumbIp.y - 0.1;
-    const isFistClosed = 
-      landmarks[8].y > landmarks[6].y &&
-      landmarks[12].y > landmarks[10].y &&
-      landmarks[16].y > landmarks[14].y &&
-      landmarks[20].y > landmarks[18].y;
-    
-    if (isThumbUp && isFistClosed) {
+
+    if (isThumbsUpPose(landmarks)) {
+      thumbsUpFrameCountRef.current += 1;
+    } else {
+      thumbsUpFrameCountRef.current = 0;
+    }
+
+    if (thumbsUpFrameCountRef.current >= 2) {
       setGesture('thumbs_up');
     } else {
       setGesture('none');
@@ -40,6 +74,8 @@ export function useGestureDetection(
 
   useEffect(() => {
     if (!isActive) {
+      thumbsUpFrameCountRef.current = 0;
+      setGesture('none');
       return;
     }
 
@@ -57,8 +93,8 @@ export function useGestureDetection(
         hands.setOptions({
           maxNumHands: 1,
           modelComplexity: 0,
-          minDetectionConfidence: 0.5,
-          minTrackingConfidence: 0.5,
+          minDetectionConfidence: 0.35,
+          minTrackingConfidence: 0.35,
         });
 
         hands.onResults(detectThumbsUp);
@@ -80,6 +116,7 @@ export function useGestureDetection(
 
     return () => {
       isMounted = false;
+      thumbsUpFrameCountRef.current = 0;
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
