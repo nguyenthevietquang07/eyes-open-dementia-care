@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type ChangeEvent } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useMutation } from '@tanstack/react-query';
@@ -12,6 +12,43 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useDetectedObjects } from '@/hooks/useDetectedObjects';
 import { Camera, Plus, Upload, Loader2 } from 'lucide-react';
+
+const MAX_IMAGE_SIDE = 1280;
+const JPEG_QUALITY = 0.82;
+
+async function compressImage(file: File) {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Please upload a valid image file.');
+  }
+
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Could not read the selected image.'));
+      img.src = sourceUrl;
+    });
+
+    const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(image.width, image.height));
+    const width = Math.max(1, Math.round(image.width * scale));
+    const height = Math.max(1, Math.round(image.height * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('Image processing is not available in this browser.');
+    }
+
+    context.drawImage(image, 0, 0, width, height);
+    return canvas.toDataURL('image/jpeg', JPEG_QUALITY);
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
+}
 
 export default function LabelForm() {
   const { toast } = useToast();
@@ -40,25 +77,31 @@ export default function LabelForm() {
       form.reset();
       setPreview(null);
     },
-    onError: () => {
+    onError: (error) => {
       toast({
         title: 'Error',
-        description: 'Failed to create label. Please try again.',
+        description: error instanceof Error ? error.message : 'Failed to create label. Please try again.',
         variant: 'destructive',
       });
     },
   });
 
-  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImageChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result as string;
-        setPreview(base64);
-        form.setValue('imageData', base64);
-      };
-      reader.readAsDataURL(file);
+      try {
+        const imageData = await compressImage(file);
+        setPreview(imageData);
+        form.setValue('imageData', imageData, { shouldValidate: true });
+      } catch (error) {
+        toast({
+          title: 'Image upload failed',
+          description: error instanceof Error ? error.message : 'Please choose a smaller image.',
+          variant: 'destructive',
+        });
+        setPreview(null);
+        form.setValue('imageData', '');
+      }
     }
   }
 

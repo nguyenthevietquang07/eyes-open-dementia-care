@@ -1,17 +1,20 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useAuth } from '@/contexts/AuthContext';
 import ModeToggle from './ModeToggle';
 import ReminderForm from './ReminderForm';
 import ReminderCard from './ReminderCard';
 import LabelForm from './LabelForm';
 import LabelCard from './LabelCard';
 import { Reminder, Label } from '@shared/schema';
-import { Activity, Bell, Brain, Database, Loader2, ShieldCheck, Tag } from 'lucide-react';
+import { Activity, Bell, Brain, Database, Loader2, LogOut, ShieldCheck, Tag } from 'lucide-react';
 
 export default function CaregiverDashboard() {
   const [activeTab, setActiveTab] = useState('reminders');
+  const { user, logout, isAuthenticating } = useAuth();
 
   const { data: reminders, isLoading: loadingReminders } = useQuery<Reminder[]>({
     queryKey: ['/api/reminders'],
@@ -33,9 +36,24 @@ export default function CaregiverDashboard() {
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold text-foreground">Eyes Open</h1>
-              <p className="text-sm text-muted-foreground">Caregiver Dashboard</p>
+              <p className="text-sm text-muted-foreground">
+                Caregiver Dashboard{user ? ` for ${user.displayName}` : ''}
+              </p>
             </div>
-            <ModeToggle />
+            <div className="flex flex-wrap items-center gap-2">
+              <ModeToggle />
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => logout()}
+                disabled={isAuthenticating}
+                data-testid="button-logout"
+              >
+                <LogOut className="h-4 w-4" />
+                Sign out
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -83,8 +101,8 @@ export default function CaregiverDashboard() {
                 <Database className="h-6 w-6" />
               </div>
               <div>
-                <p className="text-2xl font-bold">Saved</p>
-                <p className="text-sm text-muted-foreground">Local JSON persistence</p>
+                <p className="text-2xl font-bold">Scoped</p>
+                <p className="text-sm text-muted-foreground">PostgreSQL persistence</p>
               </div>
             </CardContent>
           </Card>
@@ -125,7 +143,7 @@ export default function CaregiverDashboard() {
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
               <p>Camera inference runs in the browser with TensorFlow.js and MediaPipe.</p>
-              <p>Only caregiver-authored reminders, labels, and reference images are saved locally.</p>
+              <p>Caregiver records are scoped to the signed-in user and backed by PostgreSQL when configured.</p>
             </CardContent>
           </Card>
         </section>

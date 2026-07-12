@@ -44,10 +44,10 @@ export default function ReminderForm() {
       });
       form.reset();
     },
-    onError: () => {
+    onError: (error) => {
       toast({
         title: 'Error',
-        description: 'Failed to create reminder. Please try again.',
+        description: error instanceof Error ? error.message : 'Failed to create reminder. Please try again.',
         variant: 'destructive',
       });
     },

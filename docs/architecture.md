@@ -1,14 +1,18 @@
 # Architecture
 
-Eyes Open is designed as a privacy-conscious assistive AI loop: caregivers author context, the browser performs recognition, and the elder-facing view presents only the minimum useful information.
+Eyes Open is designed as a privacy-conscious assistive AI loop: caregivers author context in a protected workspace, the browser performs recognition, and the elder-facing view presents only the minimum useful information.
 
 ```mermaid
 flowchart LR
-  caregiver["Caregiver dashboard"] --> reminders["Reminder setup"]
+  caregiver["Caregiver dashboard"] --> auth["Register or sign in"]
+  auth --> session["Signed HTTP-only cookie"]
+  caregiver --> reminders["Reminder setup"]
   caregiver --> labels["Reference labels and photos"]
   reminders --> api["Express API"]
   labels --> api
-  api --> store["Local JSON demo store<br/>Drizzle schema ready for Postgres"]
+  session --> api
+  api --> postgres["PostgreSQL<br/>users, reminders, labels"]
+  api -. "dev/test fallback" .-> memory["Memory/local JSON"]
 
   elder["Elder camera view"] --> camera["Browser camera stream"]
   camera --> detect["COCO-SSD object detection"]
@@ -31,12 +35,33 @@ flowchart LR
 - Camera frames stay in the browser.
 - TensorFlow.js and MediaPipe models are loaded only when recognition features need them.
 - The server stores caregiver-authored reminders, labels, reference images, and last-seen timestamps.
-- `.local/eyes-open-data.json` provides restart-safe local demos and is intentionally ignored by Git.
+- Reminder and label records are scoped by authenticated user ID.
+- PostgreSQL is the production persistence path through `DATABASE_URL`.
+- Memory/local JSON storage exists for development and automated tests only.
+
+## Implemented Product Traits
+
+- Authenticated caregiver accounts with signed HTTP-only sessions.
+- User-isolated reminders and labels.
+- Tested reminder create, complete, delete, and cross-user isolation.
+- Tested large label image payload handling.
+- Browser-side image resizing before label upload.
+- Lazy-loaded AI models to keep the dashboard responsive.
+
+## Model Readiness
+
+The current stack is appropriate for a compelling prototype:
+
+- COCO-SSD handles generic object detection.
+- MobileNet embeddings support lightweight visual similarity for user-defined labels.
+- MediaPipe Hands supports real-time hand landmark tracking for thumbs-up completion.
+
+It is not enough to claim production accuracy on dementia-care recognition yet. To make that claim, add a labeled evaluation dataset, record precision/recall for label matching, test gesture completion across lighting and hand poses, and document device-specific latency.
 
 ## Market-Ready Next Steps
 
-- Replace local JSON persistence with Postgres through the existing Drizzle schema.
-- Add caregiver accounts and permissions for real household use.
-- Add an evaluation set for visual-label matching accuracy and gesture reliability.
-- Add explicit consent/onboarding screens before camera activation.
-- Add offline/PWA packaging for tablet-first caregiver and elder workflows.
+- Add caregiver invitation/household roles.
+- Add consent/onboarding before camera activation.
+- Add correction feedback when a label match is wrong.
+- Add an evaluation harness for visual-label matching accuracy and gesture reliability.
+- Package tablet-friendly PWA/offline behavior for home care use.
