@@ -2,6 +2,13 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import type { MobileNet } from '@tensorflow-models/mobilenet';
 import type { Tensor } from '@tensorflow/tfjs';
 
+type CropRegion = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 export function useVisualMatcher() {
   const modelRef = useRef<MobileNet | null>(null);
   const [isModelLoading, setIsModelLoading] = useState(true);
@@ -122,6 +129,53 @@ export function useVisualMatcher() {
     return Math.max(0, Math.min(1, dotProduct));
   };
 
+  const getLabelFeatures = async (labelImage: string): Promise<number[] | null> => {
+    let labelFeatures = labelCacheRef.current.get(labelImage) || null;
+
+    if (labelFeatures) {
+      return labelFeatures;
+    }
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = labelImage;
+    });
+
+    const labelCanvas = await preprocessImage(img);
+    labelFeatures = await extractFeatures(labelCanvas);
+
+    if (labelFeatures) {
+      labelCacheRef.current.set(labelImage, labelFeatures);
+      return labelFeatures;
+    }
+
+    console.warn('Failed to extract features from label image');
+    return null;
+  };
+
+  const compareSourceToLabel = async (
+    source: HTMLVideoElement,
+    labelImage: string,
+    crop?: CropRegion
+  ): Promise<number> => {
+    if (!modelRef.current) return 0;
+
+    const canvas = crop
+      ? await preprocessImage(source, crop.x, crop.y, crop.width, crop.height)
+      : await preprocessImage(source);
+    const sourceFeatures = await extractFeatures(canvas);
+    if (!sourceFeatures) return 0;
+
+    const labelFeatures = await getLabelFeatures(labelImage);
+    if (!labelFeatures) return 0;
+
+    return cosineSimilarity(sourceFeatures, labelFeatures);
+  };
+
   const matchVisual = useCallback(async (
     videoFrame: HTMLVideoElement,
     bbox: [number, number, number, number],
@@ -139,37 +193,7 @@ export function useVisualMatcher() {
       const width = Math.max(1, Math.min(bw, videoFrame.videoWidth - x));
       const height = Math.max(1, Math.min(bh, videoFrame.videoHeight - y));
       
-      const detectedCanvas = await preprocessImage(videoFrame, x, y, width, height);
-      const detectedFeatures = await extractFeatures(detectedCanvas);
-      if (!detectedFeatures) {
-        console.warn('Failed to extract features from detected region');
-        return 0;
-      }
-
-      let labelFeatures = labelCacheRef.current.get(labelImage) || null;
-      
-      if (!labelFeatures || labelFeatures === null) {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        
-        await new Promise<void>((resolve, reject) => {
-          img.onload = () => resolve();
-          img.onerror = () => reject(new Error('Failed to load image'));
-          img.src = labelImage;
-        });
-
-        const labelCanvas = await preprocessImage(img);
-        labelFeatures = await extractFeatures(labelCanvas);
-        
-        if (labelFeatures) {
-          labelCacheRef.current.set(labelImage, labelFeatures);
-        } else {
-          console.warn('Failed to extract features from label image');
-          return 0;
-        }
-      }
-
-      const similarity = cosineSimilarity(detectedFeatures, labelFeatures);
+      const similarity = await compareSourceToLabel(videoFrame, labelImage, { x, y, width, height });
       if (similarity > 0.5) {
         console.log(`Visual match: ${(similarity * 100).toFixed(1)}%`);
       }
@@ -180,5 +204,49 @@ export function useVisualMatcher() {
     }
   }, []);
 
-  return { matchVisual, isModelLoading };
+  const matchFrameVisual = useCallback(async (
+    videoFrame: HTMLVideoElement,
+    labelImage: string
+  ): Promise<number> => {
+    if (!modelRef.current || videoFrame.videoWidth === 0 || videoFrame.videoHeight === 0) {
+      return 0;
+    }
+
+    try {
+      const width = videoFrame.videoWidth;
+      const height = videoFrame.videoHeight;
+      const centerSide = Math.min(width, height) * 0.68;
+      const objectWidth = width * 0.55;
+      const objectHeight = height * 0.68;
+      const crops: Array<CropRegion | undefined> = [
+        undefined,
+        {
+          x: (width - centerSide) / 2,
+          y: (height - centerSide) / 2,
+          width: centerSide,
+          height: centerSide,
+        },
+        {
+          x: (width - objectWidth) / 2,
+          y: (height - objectHeight) / 2,
+          width: objectWidth,
+          height: objectHeight,
+        },
+      ];
+
+      const scores = await Promise.all(
+        crops.map((crop) => compareSourceToLabel(videoFrame, labelImage, crop))
+      );
+      const similarity = Math.max(...scores);
+      if (similarity > 0.5) {
+        console.log(`Frame label match: ${(similarity * 100).toFixed(1)}%`);
+      }
+      return similarity;
+    } catch (error) {
+      console.error('Error in frame visual matching:', error);
+      return 0;
+    }
+  }, []);
+
+  return { matchVisual, matchFrameVisual, isModelLoading };
 }

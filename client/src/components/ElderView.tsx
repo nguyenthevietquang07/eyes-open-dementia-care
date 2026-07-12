@@ -22,6 +22,7 @@ export default function ElderView() {
   const [warningObject, setWarningObject] = useState<Label | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const lastSeenRef = useRef<Map<string, number>>(new Map());
+  const fallbackMatchCountRef = useRef<Map<string, number>>(new Map());
   const lastGestureCompletedRef = useRef<string | null>(null);
   const { setMode } = useMode();
 
@@ -75,7 +76,7 @@ export default function ElderView() {
     cameraActive
   );
 
-  const { matchVisual, isModelLoading: isMatcherLoading } = useVisualMatcher();
+  const { matchVisual, matchFrameVisual, isModelLoading: isMatcherLoading } = useVisualMatcher();
 
   const {
     gesture,
@@ -121,25 +122,43 @@ export default function ElderView() {
   }, []);
 
   useEffect(() => {
-    if (!labels || !detectedObjects.length || !videoRef.current || !matchVisual) {
+    if (!labels?.length || !videoRef.current || !matchVisual || !matchFrameVisual) {
       setDetectedLabels([]);
       return;
     }
 
     let cancelled = false;
     const currentTime = Date.now();
-    
+
+    const handleMatchedLabel = (label: Label, matchedLabels: Label[]) => {
+      if (matchedLabels.find((matched) => matched.id === label.id)) return;
+
+      matchedLabels.push(label);
+      const lastSeen = lastSeenRef.current.get(label.id);
+      if (lastSeen && currentTime - lastSeen < 30000) {
+        setWarningObject(label);
+        setShowWarning(true);
+        setTimeout(() => setShowWarning(false), 5000);
+      }
+
+      lastSeenRef.current.set(label.id, currentTime);
+      if (!lastSeen || currentTime - lastSeen > 5000) {
+        markLabelSeen(label.id);
+      }
+    };
+
     const matchTimeout = setTimeout(async () => {
-      if (cancelled) return;
-      
+      if (cancelled || !videoRef.current) return;
+
       const matchedLabels: Label[] = [];
-      const SIMILARITY_THRESHOLD = 0.65; // 65% visual similarity required
-      
+      const DETECTION_MATCH_THRESHOLD = 0.65;
+      const FRAME_MATCH_THRESHOLD = 0.68;
+
       for (const obj of detectedObjects) {
         if (cancelled) break;
-        
-        const potentialMatches = labels.filter(label => 
-          label.detectedObjects?.some(detObj => 
+
+        const potentialMatches = labels.filter(label =>
+          label.detectedObjects?.some(detObj =>
             detObj.toLowerCase().includes(obj.class.toLowerCase()) ||
             obj.class.toLowerCase().includes(detObj.toLowerCase())
           )
@@ -147,41 +166,49 @@ export default function ElderView() {
 
         for (const label of potentialMatches) {
           if (cancelled) break;
-          if (matchedLabels.find(l => l.id === label.id)) continue;
+          if (matchedLabels.find((matched) => matched.id === label.id)) continue;
 
           const similarity = await matchVisual(
-            videoRef.current!,
+            videoRef.current,
             obj.bbox,
             label.imageData
           );
 
-          if (similarity >= SIMILARITY_THRESHOLD) {
-            matchedLabels.push(label);
-            
-            const lastSeen = lastSeenRef.current.get(label.id);
-            if (lastSeen && currentTime - lastSeen < 30000) {
-              setWarningObject(label);
-              setShowWarning(true);
-              setTimeout(() => setShowWarning(false), 5000);
-            }
-            
-            lastSeenRef.current.set(label.id, currentTime);
-            markLabelSeen(label.id);
-            break; // Found a match for this detection, move to next
+          if (similarity >= DETECTION_MATCH_THRESHOLD) {
+            fallbackMatchCountRef.current.set(label.id, 0);
+            handleMatchedLabel(label, matchedLabels);
+            break;
           }
+        }
+      }
+
+      const fallbackLabels = labels
+        .filter((label) => !matchedLabels.find((matched) => matched.id === label.id))
+        .slice(0, 8);
+
+      for (const label of fallbackLabels) {
+        if (cancelled || !videoRef.current) break;
+
+        const similarity = await matchFrameVisual(videoRef.current, label.imageData);
+        const previousCount = fallbackMatchCountRef.current.get(label.id) ?? 0;
+        const nextCount = similarity >= FRAME_MATCH_THRESHOLD ? previousCount + 1 : 0;
+        fallbackMatchCountRef.current.set(label.id, nextCount);
+
+        if (nextCount >= 2) {
+          handleMatchedLabel(label, matchedLabels);
         }
       }
 
       if (!cancelled) {
         setDetectedLabels(matchedLabels);
       }
-    }, 500); // Throttle to 500ms
+    }, 900);
 
     return () => {
       cancelled = true;
       clearTimeout(matchTimeout);
     };
-  }, [detectedObjects, labels, matchVisual, markLabelSeen]);
+  }, [detectedObjects, labels, matchFrameVisual, matchVisual, markLabelSeen]);
 
   useEffect(() => {
     if (gesture !== 'thumbs_up' || activeReminders.length === 0 || isCompletingReminder) {
